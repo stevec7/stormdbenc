@@ -1,36 +1,95 @@
-package bolt
+package boltenc
 
 import (
 	"fmt"
 
-	"github.com/boltdb/bolt"
+	"github.com/asdine/storm/v3"
 )
 
-type Cred struct {
-	Username string
-	Host     string
-	Password string
+// Cryptor is an interface that can be implemented in order
+//	to read/write encrypted records to a boltdb database, via storm
+type Cryptor interface {
+	Decrypt([]byte) ([]byte, error)
+	Encrypt([]byte) ([]byte, error)
 }
 
-func setupDB(filename string) (*bolt.DB, error) {
-	db, err := bolt.Open(filename, 0600, nil)
+// Record is a struct that is used to encapsulate
+//	encrypted credentials in and out of a storm database (boltdb)
+type Record struct {
+	ID      int `storm:"id,increment"`
+	Payload []byte
+}
+
+// NewRecord returns an empty Record struct
+func NewRecord() *Record {
+	return &Record{}
+}
+
+// Get retrieves an entry from a storm db, decrypts it, and then returns it
+func Get(c Cryptor, db *storm.DB, id int) (map[int][]byte, error) {
+	data := map[int][]byte{}
+	r := NewRecord()
+	err := db.One("ID", id, r)
 	if err != nil {
-		return nil, fmt.Errorf("could not open db, %v", err)
+		return data, err
 	}
-	err = db.Update(func(tx *bolt.Tx) error {
-		root, err := tx.CreateBucketIfNotExists([]byte("DB"))
-		if err != nil {
-			return fmt.Errorf("could not create root bucket: %v", err)
-		}
-		_, err = root.CreateBucketIfNotExists([]byte("CREDS"))
-		if err != nil {
-			return fmt.Errorf("could not create creds bucket: %v", err)
-		}
-		return nil
-	})
+
+	d, err := c.Decrypt(r.Payload)
 	if err != nil {
-		return nil, fmt.Errorf("could not set up buckets, %v", err)
+		return data, err
 	}
-	fmt.Println("DB Setup Done")
-	return db, nil
+	data[r.ID] = d
+
+	return data, nil
+}
+
+// GetAll retrieves all records
+func GetAll(c Cryptor, db *storm.DB) (map[int][]byte, error) {
+	var records []Record
+	err := db.All(&records)
+	if err != nil {
+		return map[int][]byte{}, err
+	}
+
+	data := map[int][]byte{}
+	for _, r := range records {
+		d, err := c.Decrypt(r.Payload)
+		if err != nil {
+			return data, fmt.Errorf("decrypting record, %s", err)
+		}
+		data[r.ID] = d
+	}
+	return data, nil
+}
+
+// Put appends a record into the database
+func Put(c Cryptor, db *storm.DB, payload []byte) (int, error) {
+	r := NewRecord()
+	cred, err := c.Encrypt(payload)
+	if err != nil {
+		return -1, err
+	}
+	r.Payload = cred
+
+	err = db.Save(r)
+	if err != nil {
+		return -1, err
+	}
+	return r.ID, nil
+}
+
+// Set modifies an existing record
+func Set(c Cryptor, db *storm.DB, id int, payload []byte) error {
+	newPayload, err := c.Encrypt(payload)
+	if err != nil {
+		return err
+	}
+
+	err = db.UpdateField(&Record{
+		ID: id,
+	}, "Payload", newPayload)
+	if err != nil {
+		return err
+	}
+	return nil
 }
