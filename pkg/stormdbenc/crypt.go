@@ -1,4 +1,4 @@
-package boltenc
+package stormdbenc
 
 import (
 	"fmt"
@@ -23,6 +23,20 @@ type Record struct {
 // NewRecord returns an empty Record struct
 func NewRecord() *Record {
 	return &Record{}
+}
+
+// Delete removes an entry from the database
+func Delete(c Cryptor, db *storm.DB, id int) error {
+	record, err := Get(c, db, id)
+	if err != nil {
+		return err
+	}
+
+	err = db.DeleteStruct(record[id])
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // Get retrieves an entry from a storm db, decrypts it, and then returns it

@@ -9,9 +9,7 @@ import (
 
 	"github.com/asdine/storm/v3"
 	"github.com/stevec7/sshencode/pkg/sshencode"
-
-	//"github.com/stevec7/random/boltdbenc/pkg/boltenc"
-	"github.com/stevec7/random/boltdbenc/pkg/boltenc"
+	"github.com/stevec7/stormdbenc/pkg/stormdbenc"
 )
 
 /*
@@ -105,7 +103,7 @@ func main() {
 	cr := NewC()
 	cr.a = agent
 
-	record, err := boltenc.Put(cr, db, c.Bytes())
+	record, err := stormdbenc.Put(cr, db, c.Bytes())
 	if err != nil {
 		log.Fatalf("Error getting record, %s", err)
 	}
@@ -121,7 +119,7 @@ func main() {
 
 	//fmt.Printf("Record: %+v\n", record)
 
-	results, err := boltenc.GetAll(cr, db)
+	results, err := stormdbenc.GetAll(cr, db)
 	if err != nil {
 		log.Fatalf("Error getting all entries, %s", err)
 	}
